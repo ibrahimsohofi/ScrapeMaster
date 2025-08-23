@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datavault-pro
+  labels:
+    name: datavault-pro
+    environment: production
+    app: datavault-pro
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datavault-pro-staging
+  labels:
+    name: datavault-pro-staging
+    environment: staging
+    app: datavault-pro

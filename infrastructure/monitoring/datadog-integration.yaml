@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datadog-secret
+  namespace: monitoring
+type: Opaque
+stringData:
+  api-key: ${DATADOG_API_KEY}
+  app-key: ${DATADOG_APP_KEY}
+---
+apiVersion: datadoghq.com/v1alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+  namespace: monitoring
+spec:
+  global:
+    site: "datadoghq.com"
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+      appSecret:
+        secretName: datadog-secret
+        keyName: app-key
+
+  agent:
+    image:
+      name: "gcr.io/datadoghq/agent:latest"
+
+    config:
+      collectEvents: true
+      leaderElection: true
+
+    apm:
+      enabled: true
+
+    systemProbe:
+      enabled: true
+
+    security:
+      compliance:
+        enabled: true
+      runtime:
+        enabled: true
+
+  clusterAgent:
+    image:
+      name: "gcr.io/datadoghq/cluster-agent:latest"
+
+    config:
+      externalMetrics:
+        enabled: true
+      admissionController:
+        enabled: true
+
+  clusterChecksRunner:
+    enabled: true
+    replicas: 2
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datadog-custom-metrics
+  namespace: monitoring
+data:
+  scraping-metrics.yaml: |
+    init_config:
+    instances:
+      - prometheus_url: http://prometheus-server.monitoring.svc.cluster.local/metrics
+        namespace: "datavault"
+        metrics:
+          - datavault_scraping_jobs_total
+          - datavault_scraping_success_rate
+          - datavault_scraping_duration_seconds
+          - datavault_proxy_health_score
+          - datavault_captcha_solve_rate
+          - datavault_export_requests_total
+          - datavault_active_users
+          - datavault_billing_usage

@@ -1,0 +1,64 @@
+{
+  "buildCommand": "bun install && bun run db:generate && SKIP_ENV_VALIDATION=true ESLINT_NO_DEV_ERRORS=true bun run build",
+  "outputDirectory": ".next",
+  "installCommand": "bun install",
+  "devCommand": "bun run dev",
+  "framework": "nextjs",
+  "regions": ["iad1", "sfo1"],
+  "functions": {
+    "app/api/**/*": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, private"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), location=(), payment=()"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/dashboard/(.*)",
+      "destination": "/dashboard/$1"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "SKIP_ENV_VALIDATION": "true",
+    "ESLINT_NO_DEV_ERRORS": "true"
+  }
+}

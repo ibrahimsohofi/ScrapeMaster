@@ -1,0 +1,256 @@
+version: '3.8'
+
+# =============================================================================
+# DataVault Pro - Development Environment
+# Complete development stack with all services and debugging capabilities
+# =============================================================================
+
+services:
+  # =============================================================================
+  # Main Application
+  # =============================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        NODE_VERSION: 18-alpine
+        BUN_VERSION: 1.0.0
+        BUILD_TIME: ${BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        COMMIT_SHA: ${COMMIT_SHA:-dev}
+    container_name: datavault-pro-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/datavault_dev
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=development-jwt-secret-change-in-production
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - SEED_DATABASE=true
+      # AI Features
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # CAPTCHA Services (optional)
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY:-}
+      - ANTICAPTCHA_API_KEY=${ANTICAPTCHA_API_KEY:-}
+      - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY:-}
+      - DEATHBYCAPTCHA_API_KEY=${DEATHBYCAPTCHA_API_KEY:-}
+      # Proxy Services (optional)
+      - BRIGHTDATA_API_KEY=${BRIGHTDATA_API_KEY:-}
+      - OXYLABS_API_KEY=${OXYLABS_API_KEY:-}
+      - IPROYAL_API_KEY=${IPROYAL_API_KEY:-}
+      - RAYOBYTE_API_KEY=${RAYOBYTE_API_KEY:-}
+      - SMARTPROXY_API_KEY=${SMARTPROXY_API_KEY:-}
+      - PROXYMESH_API_KEY=${PROXYMESH_API_KEY:-}
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: datavault-pro-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=datavault_dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d datavault_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Redis Cache & Queue
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: datavault-pro-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Development Tools
+  # =============================================================================
+
+  # Prisma Studio (Database GUI)
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps
+    container_name: datavault-pro-prisma-studio
+    ports:
+      - "5555:5555"
+    command: bunx prisma studio --port 5555 --hostname 0.0.0.0
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/datavault_dev
+    volumes:
+      - ./prisma:/app/prisma
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: datavault-pro-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # pgAdmin (PostgreSQL GUI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: datavault-pro-pgadmin
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@datavault.pro
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Monitoring Stack (Development)
+  # =============================================================================
+
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: datavault-pro-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # Grafana (Metrics Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: datavault-pro-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Browser Pool (for scraping)
+  # =============================================================================
+
+  # Chrome Browser Service
+  chrome:
+    image: browserless/chrome:latest
+    container_name: datavault-pro-chrome
+    ports:
+      - "3003:3000"
+    environment:
+      - MAX_CONCURRENT_SESSIONS=10
+      - CONNECTION_TIMEOUT=60000
+      - MAX_QUEUE_LENGTH=50
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+    shm_size: 2gb
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  datavault-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

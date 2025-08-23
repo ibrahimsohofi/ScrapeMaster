@@ -1,0 +1,37 @@
+<svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#0D9488;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0F766E;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="headerIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0FDF4;stop-opacity:0.95" />
+    </linearGradient>
+    <linearGradient id="headerText" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0F766E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Icon container -->
+  <rect width="40" height="40" rx="10" fill="url(#headerBg)"/>
+  <rect x="0.5" y="0.5" width="39" height="39" rx="9.5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+
+  <!-- ScrapeMaster "S" icon -->
+  <path d="M 14 10 C 18 10 20 12 20 15 C 20 17 18 18 16 18 L 14 18 C 12 18 11 19 11 20.5 C 11 22 12 23 14 23 L 26 23"
+        stroke="url(#headerIcon)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Data points -->
+  <circle cx="17" cy="12" r="1.2" fill="url(#headerIcon)"/>
+  <circle cx="22" cy="20" r="1" fill="url(#headerIcon)" opacity="0.9"/>
+
+  <!-- AI indicator -->
+  <circle cx="29" cy="18" r="3.5" fill="none" stroke="url(#headerIcon)" stroke-width="1.5" opacity="0.9"/>
+  <circle cx="29" cy="18" r="1.2" fill="url(#headerIcon)"/>
+
+  <!-- Brand text -->
+  <text x="50" y="16" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="url(#headerText)">ScrapeMaster</text>
+  <text x="50" y="30" font-family="Arial, sans-serif" font-size="9" font-weight="400" fill="#64748B" opacity="0.8">AI-Powered Data Extraction</text>
+</svg>
