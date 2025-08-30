@@ -1,0 +1,43 @@
+User-agent: *
+Allow: /
+
+# Allow all public pages
+Allow: /features
+Allow: /pricing
+Allow: /documentation
+Allow: /tutorials
+Allow: /api-reference
+Allow: /faq
+Allow: /blog
+Allow: /changelog
+Allow: /community
+Allow: /about
+Allow: /careers
+Allow: /contact
+Allow: /partners
+Allow: /privacy
+Allow: /terms
+Allow: /cookies
+Allow: /compliance
+
+# Allow authentication pages (for SEO but low priority)
+Allow: /auth/login
+Allow: /auth/signup
+
+# Disallow private/protected areas
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /auth/verify-email
+Disallow: /auth/reset-password
+Disallow: /auth/forgot-password
+
+# Disallow admin or internal pages
+Disallow: /admin/
+Disallow: /_next/
+Disallow: /.*
+
+# Crawl delay to be respectful
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://scrapecloud.com/sitemap.xml

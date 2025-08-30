@@ -1,0 +1,176 @@
+groups:
+  - name: datavault-application
+    rules:
+      # Application Health
+      - alert: DataVaultDown
+        expr: up{job="datavault-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: datavault-app
+        annotations:
+          summary: "DataVault Pro application is down"
+          description: "DataVault Pro application has been down for more than 1 minute"
+
+      - alert: DataVaultHighErrorRate
+        expr: rate(datavault_http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          service: datavault-app
+        annotations:
+          summary: "High error rate in DataVault Pro"
+          description: "Error rate is {{ $value }} errors per second"
+
+      # Response Time Alerts
+      - alert: DataVaultHighLatency
+        expr: histogram_quantile(0.95, rate(datavault_http_request_duration_seconds_bucket[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: datavault-app
+        annotations:
+          summary: "High latency in DataVault Pro"
+          description: "95th percentile latency is {{ $value }}s"
+
+      # Scraper Performance
+      - alert: ScraperJobFailureRate
+        expr: rate(datavault_scraper_jobs_failed_total[5m]) / rate(datavault_scraper_jobs_total[5m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: scraper
+        annotations:
+          summary: "High scraper job failure rate"
+          description: "Scraper job failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: ScraperQueueBacklog
+        expr: datavault_scraper_queue_size > 1000
+        for: 2m
+        labels:
+          severity: warning
+          service: scraper
+        annotations:
+          summary: "Large scraper queue backlog"
+          description: "Scraper queue has {{ $value }} pending jobs"
+
+  - name: datavault-infrastructure
+    rules:
+      # System Resources
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 1m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value }}% full on {{ $labels.instance }}"
+
+  - name: datavault-business
+    rules:
+      # Proxy Health
+      - alert: ProxyProviderDown
+        expr: datavault_proxy_provider_status == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: proxy
+        annotations:
+          summary: "Proxy provider is down"
+          description: "Proxy provider {{ $labels.provider }} is not responding"
+
+      - alert: HighProxyCosts
+        expr: rate(datavault_proxy_cost_total[1h]) > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: billing
+        annotations:
+          summary: "High proxy costs"
+          description: "Proxy costs are ${{ $value }}/hour"
+
+      # Data Quality
+      - alert: DataExportFailures
+        expr: rate(datavault_export_failed_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: export
+        annotations:
+          summary: "High data export failure rate"
+          description: "Export failure rate is {{ $value }} per second"
+
+      # Security
+      - alert: SuspiciousActivity
+        expr: rate(datavault_security_violations_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          service: security
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "{{ $value }} security violations per second"
+
+      - alert: FailedLoginAttempts
+        expr: rate(datavault_auth_failed_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: auth
+        annotations:
+          summary: "High failed login attempts"
+          description: "{{ $value }} failed login attempts per second"
+
+  - name: datavault-containers
+    rules:
+      # Container Health
+      - alert: ContainerDown
+        expr: absent(container_last_seen{name=~"datavault.*"})
+        for: 1m
+        labels:
+          severity: critical
+          service: container
+        annotations:
+          summary: "DataVault container is down"
+          description: "Container {{ $labels.name }} is not running"
+
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name=~"datavault.*"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: container
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container {{ $labels.name }} CPU usage is {{ $value }}%"
+
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes{name=~"datavault.*"} / container_spec_memory_limit_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: container
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}%"
