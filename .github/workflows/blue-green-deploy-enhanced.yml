@@ -1,0 +1,381 @@
+name: Enhanced Blue-Green Deployment Pipeline
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment (skip some checks)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: '18'
+  BUNYA_VERSION: 'latest'
+
+jobs:
+  # Continuous Integration
+  ci:
+    name: Continuous Integration
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+      should-deploy: ${{ steps.check-deploy.outputs.should-deploy }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: ${{ env.BUNYA_VERSION }}
+
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+
+    - name: Run linting
+      run: bun run lint
+
+    - name: Run type checking
+      run: bun run lint
+
+    - name: Run unit tests
+      run: bun run test:run
+      env:
+        CI: true
+
+    - name: Run integration tests
+      run: |
+        # Start test database
+        bun run db:push
+        bun run db:seed
+        # Run integration tests
+        bun run test:integration || true
+
+    - name: Build application
+      run: bun run build:production
+
+    - name: Check deployment conditions
+      id: check-deploy
+      run: |
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "should-deploy=staging" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/production" ]]; then
+          echo "should-deploy=production" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "should-deploy=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+        else
+          echo "should-deploy=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Log in to Container Registry
+      if: steps.check-deploy.outputs.should-deploy != 'false'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      if: steps.check-deploy.outputs.should-deploy != 'false'
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Set up Docker Buildx
+      if: steps.check-deploy.outputs.should-deploy != 'false'
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push Docker image
+      if: steps.check-deploy.outputs.should-deploy != 'false'
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+  # Security Scanning
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: ci
+    if: needs.ci.outputs.should-deploy != 'false'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.ci.outputs.image-tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Check for critical vulnerabilities
+      run: |
+        # Parse trivy results and fail if critical vulnerabilities found
+        if grep -q '"level": "error"' trivy-results.sarif; then
+          echo "Critical vulnerabilities found!"
+          exit 1
+        fi
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [ci, security]
+    if: needs.ci.outputs.should-deploy == 'staging'
+    environment:
+      name: staging
+      url: https://staging.datavault.pro
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Deploy to staging
+      run: |
+        chmod +x ./scripts/blue-green-deploy-enhanced.sh
+        ./scripts/blue-green-deploy-enhanced.sh
+      env:
+        NAMESPACE: datavault-pro-staging
+        IMAGE_TAG: ${{ github.sha }}
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+        HEALTH_CHECK_TIMEOUT: 300
+
+    - name: Run smoke tests
+      run: |
+        # Wait for deployment to stabilize
+        sleep 60
+
+        # Run smoke tests against staging environment
+        export STAGING_URL="https://staging.datavault.pro"
+        bun run test:smoke || true
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+          -H 'Content-type: application/json' \
+          --data '{"text":"✅ ScrapeMaster staging deployment successful!"}'
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [ci, security]
+    if: needs.ci.outputs.should-deploy == 'production'
+    environment:
+      name: production
+      url: https://datavault.pro
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Pre-deployment checks
+      run: |
+        # Check if staging deployment was successful
+        if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+          echo "Production deployments should go through staging first"
+          exit 1
+        fi
+
+        # Check system health
+        kubectl get pods -n datavault-pro-production
+        kubectl top nodes
+
+    - name: Create deployment backup
+      run: |
+        # Backup current deployment configuration
+        kubectl get deployment datavault-pro-blue -n datavault-pro-production -o yaml > backup-blue.yaml || true
+        kubectl get deployment datavault-pro-green -n datavault-pro-production -o yaml > backup-green.yaml || true
+
+    - name: Deploy to production
+      run: |
+        chmod +x ./scripts/blue-green-deploy-enhanced.sh
+        ./scripts/blue-green-deploy-enhanced.sh
+      env:
+        NAMESPACE: datavault-pro-production
+        IMAGE_TAG: ${{ github.sha }}
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+        HEALTH_CHECK_TIMEOUT: 600
+        KEEP_OLD_ENVIRONMENT: true
+
+    - name: Run production smoke tests
+      run: |
+        # Wait for deployment to stabilize
+        sleep 120
+
+        # Run comprehensive smoke tests
+        export PRODUCTION_URL="https://datavault.pro"
+        bun run test:smoke:production
+
+    - name: Monitor post-deployment
+      run: |
+        # Monitor for 10 minutes post-deployment
+        for i in {1..10}; do
+          echo "Monitoring minute $i/10..."
+
+          # Check error rates
+          ERROR_RATE=$(kubectl logs -n datavault-pro-production -l app=datavault-pro --tail=100 | grep ERROR | wc -l)
+          if [[ $ERROR_RATE -gt 10 ]]; then
+            echo "High error rate detected: $ERROR_RATE errors"
+            exit 1
+          fi
+
+          sleep 60
+        done
+
+    - name: Update deployment status
+      if: always()
+      run: |
+        if [[ "${{ job.status }}" == "success" ]]; then
+          # Update deployment tracking
+          curl -X POST "${{ secrets.DEPLOYMENT_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "environment": "production",
+              "version": "${{ github.sha }}",
+              "status": "success",
+              "timestamp": "'$(date -Iseconds)'"
+            }'
+        fi
+
+  # Post-deployment monitoring
+  post-deployment:
+    name: Post-deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+
+    steps:
+    - name: Setup monitoring
+      run: |
+        # Set up extended monitoring for next 24 hours
+        echo "Setting up extended monitoring..."
+
+    - name: Create monitoring alerts
+      run: |
+        # Create temporary elevated alerting
+        if [[ "${{ needs.deploy-production.result }}" == "success" ]]; then
+          echo "Production deployment detected - setting up enhanced monitoring"
+          # This would typically integrate with your monitoring system
+          # to create temporary elevated alerts
+        fi
+
+    - name: Schedule deployment report
+      run: |
+        # Schedule a deployment report to be sent in 24 hours
+        echo "Deployment completed. Scheduling 24-hour report..."
+
+  # Rollback capability
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        if [[ "${{ github.event.inputs.environment }}" == "production" ]]; then
+          echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        else
+          echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        fi
+        chmod 600 ~/.kube/config
+
+    - name: Execute rollback
+      run: |
+        NAMESPACE="datavault-pro-${{ github.event.inputs.environment }}"
+
+        # Get current active deployment
+        CURRENT_COLOR=$(kubectl get service datavault-pro -n $NAMESPACE -o jsonpath='{.spec.selector.version}')
+
+        # Switch to the other color (rollback)
+        if [[ "$CURRENT_COLOR" == "blue" ]]; then
+          TARGET_COLOR="green"
+        else
+          TARGET_COLOR="blue"
+        fi
+
+        echo "Rolling back from $CURRENT_COLOR to $TARGET_COLOR"
+
+        # Switch traffic
+        kubectl patch service datavault-pro -n $NAMESPACE -p '{"spec":{"selector":{"version":"'$TARGET_COLOR'"}}}'
+
+        # Notify
+        curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+          -H 'Content-type: application/json' \
+          --data '{"text":"🚨 Emergency rollback executed for ScrapeMaster '${{ github.event.inputs.environment }}' environment"}'

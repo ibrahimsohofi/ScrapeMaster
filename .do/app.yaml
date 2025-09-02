@@ -1,0 +1,53 @@
+name: datavault-pro
+services:
+- name: web
+  source_dir: /
+  github:
+    repo: ibrahimsohofi/ScrapeMaster
+    branch: main
+  run_command: |
+    bun install --frozen-lockfile &&
+    bun run db:generate &&
+    bun run build &&
+    node server.js
+  environment_slug: node-js
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  http_port: 3000
+  health_check:
+    http_path: /api/health
+  envs:
+  - key: NODE_ENV
+    value: production
+  - key: DATABASE_URL
+    value: file:./prisma/dev.db
+  - key: JWT_SECRET
+    value: your-super-secret-jwt-key-change-this-in-production-32-chars-minimum
+  - key: REFRESH_SECRET
+    value: your-super-secret-refresh-key-change-this-in-production-32-chars-minimum
+  - key: NEXT_PUBLIC_APP_URL
+    value: ${APP_URL}
+  - key: NEXT_TELEMETRY_DISABLED
+    value: "1"
+  - key: HOSTNAME
+    value: 0.0.0.0
+  - key: PORT
+    value: "3000"
+  - key: SEED_DATABASE
+    value: "true"
+
+# Optional: Add a database service for production
+# databases:
+# - name: datavault-db
+#   engine: PG
+#   version: "13"
+#   size: db-s-1vcpu-1gb
+
+# Optional: Add Redis for job queuing
+# services:
+# - name: redis
+#   source_dir: /
+#   run_command: redis-server
+#   environment_slug: ubuntu
+#   instance_count: 1
+#   instance_size_slug: basic-xxs

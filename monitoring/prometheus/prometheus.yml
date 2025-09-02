@@ -1,0 +1,87 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'datavault-pro'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # DataVault Pro Application
+  - job_name: 'datavault-app'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # cAdvisor (Container Metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Redis Metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-monitoring:6379']
+
+  # Custom DataVault Metrics
+  - job_name: 'datavault-scrapers'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/metrics/scrapers'
+    scrape_interval: 30s
+
+  - job_name: 'datavault-proxies'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/metrics/proxies'
+    scrape_interval: 60s
+
+  - job_name: 'datavault-performance'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/metrics/performance'
+    scrape_interval: 15s
+
+  # Health Check Endpoints
+  - job_name: 'datavault-health'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/api/health'
+    scrape_interval: 10s
+
+# Remote write configuration (for external monitoring services)
+remote_write:
+  # Uncomment and configure for DataDog
+  # - url: "https://api.datadoghq.com/api/v1/series"
+  #   remote_timeout: 30s
+  #   headers:
+  #     DD-API-KEY: "your-datadog-api-key"
+
+  # Uncomment and configure for Grafana Cloud
+  # - url: "https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push"
+  #   basic_auth:
+  #     username: "your-grafana-cloud-username"
+  #     password: "your-grafana-cloud-password"

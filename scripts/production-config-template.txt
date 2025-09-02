@@ -1,0 +1,39 @@
+# DataVault Pro Production Environment Configuration
+# Copy this content to .env.production and fill in the values
+
+# ========================================
+# CORE APPLICATION SETTINGS
+# ========================================
+
+NODE_ENV=production
+DOMAIN=your-domain.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+ALLOWED_ORIGINS=https://your-domain.com,https://app.your-domain.com
+
+# ========================================
+# DATABASE CONFIGURATION
+# ========================================
+
+DATABASE_URL=postgresql://datavault:CHANGE_DB_PASSWORD@postgres:5432/datavault_prod
+DB_PASSWORD=CHANGE_THIS_TO_STRONG_PASSWORD
+
+# ========================================
+# SECURITY SETTINGS
+# ========================================
+
+JWT_SECRET=CHANGE_THIS_TO_RANDOM_STRING_32_CHARS_MIN
+REDIS_PASSWORD=CHANGE_THIS_TO_STRONG_REDIS_PASSWORD
+
+# ========================================
+# THIRD-PARTY SERVICES
+# ========================================
+
+OPENAI_API_KEY=sk-your-openai-api-key-here
+REDIS_URL=redis://:CHANGE_THIS_TO_STRONG_REDIS_PASSWORD@redis:6379
+
+# ========================================
+# MONITORING & LOGGING
+# ========================================
+
+GRAFANA_PASSWORD=CHANGE_THIS_TO_STRONG_GRAFANA_PASSWORD
+LOG_LEVEL=info

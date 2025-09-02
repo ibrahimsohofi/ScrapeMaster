@@ -1,0 +1,460 @@
+version: '3.8'
+
+# =============================================================================
+# DataVault Pro - Production Environment
+# Enterprise-grade production deployment with security and scalability
+# =============================================================================
+
+services:
+  # =============================================================================
+  # Load Balancer (HAProxy)
+  # =============================================================================
+  loadbalancer:
+    image: haproxy:2.8-alpine
+    container_name: datavault-pro-lb
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # HAProxy stats
+    volumes:
+      - ./haproxy/haproxy.conf:/usr/local/etc/haproxy/haproxy.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - ./logs/haproxy:/var/log/haproxy
+    depends_on:
+      - app-1
+      - app-2
+      - app-3
+    networks:
+      - datavault-network
+      - external-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "haproxy", "-c", "-f", "/usr/local/etc/haproxy/haproxy.conf"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =============================================================================
+  # Application Instances (3 replicas for HA)
+  # =============================================================================
+  app-1:
+    image: ghcr.io/ibrahimsohofi/datavault-pro:latest
+    container_name: datavault-pro-app-1
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis-cluster:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${APP_URL}
+      - INSTANCE_ID=app-1
+      # Production secrets
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
+      - ANTICAPTCHA_API_KEY=${ANTICAPTCHA_API_KEY}
+      - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY}
+      - DEATHBYCAPTCHA_API_KEY=${DEATHBYCAPTCHA_API_KEY}
+      # Proxy services
+      - BRIGHTDATA_API_KEY=${BRIGHTDATA_API_KEY}
+      - OXYLABS_API_KEY=${OXYLABS_API_KEY}
+      - IPROYAL_API_KEY=${IPROYAL_API_KEY}
+      - RAYOBYTE_API_KEY=${RAYOBYTE_API_KEY}
+      - SMARTPROXY_API_KEY=${SMARTPROXY_API_KEY}
+      - PROXYMESH_API_KEY=${PROXYMESH_API_KEY}
+      # Monitoring
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - app-logs:/app/logs
+      - app-uploads:/app/uploads
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-cluster:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  app-2:
+    image: ghcr.io/ibrahimsohofi/datavault-pro:latest
+    container_name: datavault-pro-app-2
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis-cluster:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${APP_URL}
+      - INSTANCE_ID=app-2
+      # Production secrets (same as app-1)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
+      - ANTICAPTCHA_API_KEY=${ANTICAPTCHA_API_KEY}
+      - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY}
+      - DEATHBYCAPTCHA_API_KEY=${DEATHBYCAPTCHA_API_KEY}
+      - BRIGHTDATA_API_KEY=${BRIGHTDATA_API_KEY}
+      - OXYLABS_API_KEY=${OXYLABS_API_KEY}
+      - IPROYAL_API_KEY=${IPROYAL_API_KEY}
+      - RAYOBYTE_API_KEY=${RAYOBYTE_API_KEY}
+      - SMARTPROXY_API_KEY=${SMARTPROXY_API_KEY}
+      - PROXYMESH_API_KEY=${PROXYMESH_API_KEY}
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - app-logs:/app/logs
+      - app-uploads:/app/uploads
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-cluster:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  app-3:
+    image: ghcr.io/ibrahimsohofi/datavault-pro:latest
+    container_name: datavault-pro-app-3
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis-cluster:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - NEXT_PUBLIC_APP_URL=${APP_URL}
+      - INSTANCE_ID=app-3
+      # Production secrets (same as app-1)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY}
+      - ANTICAPTCHA_API_KEY=${ANTICAPTCHA_API_KEY}
+      - CAPMONSTER_API_KEY=${CAPMONSTER_API_KEY}
+      - DEATHBYCAPTCHA_API_KEY=${DEATHBYCAPTCHA_API_KEY}
+      - BRIGHTDATA_API_KEY=${BRIGHTDATA_API_KEY}
+      - OXYLABS_API_KEY=${OXYLABS_API_KEY}
+      - IPROYAL_API_KEY=${IPROYAL_API_KEY}
+      - RAYOBYTE_API_KEY=${RAYOBYTE_API_KEY}
+      - SMARTPROXY_API_KEY=${SMARTPROXY_API_KEY}
+      - PROXYMESH_API_KEY=${PROXYMESH_API_KEY}
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - app-logs:/app/logs
+      - app-uploads:/app/uploads
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      redis-cluster:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # =============================================================================
+  # Database Cluster (PostgreSQL with read replicas)
+  # =============================================================================
+  postgres-primary:
+    image: postgres:15-alpine
+    container_name: datavault-pro-postgres-primary
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-datavault_pro}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_REPLICATION_MODE=master
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      - POSTGRES_MAX_CONNECTIONS=200
+      - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+      - ./database/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./database/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./backups:/backups
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-datavault_pro}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:15-alpine
+    container_name: datavault-pro-postgres-replica
+    expose:
+      - "5432"
+    environment:
+      - POSTGRES_MASTER_SERVICE=postgres-primary
+      - POSTGRES_REPLICATION_MODE=slave
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${POSTGRES_REPLICATION_PASSWORD}
+      - POSTGRES_MASTER_PORT_NUMBER=5432
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # =============================================================================
+  # Redis Cluster
+  # =============================================================================
+  redis-cluster:
+    image: redis:7-alpine
+    container_name: datavault-pro-redis-cluster
+    expose:
+      - "6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_cluster_data:/data
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================================================================
+  # Production Monitoring Stack
+  # =============================================================================
+
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: datavault-pro-prometheus
+    expose:
+      - "9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # AlertManager (Alert Routing)
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: datavault-pro-alertmanager
+    expose:
+      - "9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://alertmanager:9093'
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    depends_on:
+      - prometheus
+    networks:
+      - datavault-network
+    restart: unless-stopped
+
+  # Grafana (Metrics Visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: datavault-pro-grafana
+    expose:
+      - "3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # =============================================================================
+  # Browser Farm (for scraping)
+  # =============================================================================
+
+  # Chrome Browser Pool
+  chrome-pool:
+    image: browserless/chrome:latest
+    container_name: datavault-pro-chrome-pool
+    expose:
+      - "3000"
+    environment:
+      - MAX_CONCURRENT_SESSIONS=20
+      - CONNECTION_TIMEOUT=60000
+      - MAX_QUEUE_LENGTH=100
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+      - CHROME_REFRESH_TIME=3600000
+      - DEFAULT_BLOCK_ADS=true
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    shm_size: 2gb
+    networks:
+      - datavault-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/introspect"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres_primary_data:
+    driver: local
+  postgres_replica_data:
+    driver: local
+  redis_cluster_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  alertmanager_data:
+    driver: local
+  grafana_data:
+    driver: local
+  app-logs:
+    driver: local
+  app-uploads:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  datavault-network:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+  external-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/16

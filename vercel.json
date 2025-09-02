@@ -1,0 +1,66 @@
+{
+  "buildCommand": "bun install && bun run db:generate && bun run build",
+  "outputDirectory": ".next",
+  "installCommand": "bun install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "SKIP_ENV_VALIDATION": "true",
+    "ESLINT_NO_DEV_ERRORS": "true"
+  },
+  "build": {
+    "env": {
+      "NODE_ENV": "production",
+      "SKIP_ENV_VALIDATION": "true",
+      "ESLINT_NO_DEV_ERRORS": "true",
+      "DISABLE_BACKUP_SYSTEM": "true",
+      "DISABLE_SSL_MANAGER": "true",
+      "DISABLE_ENTERPRISE_FEATURES": "true"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), location=(), payment=()"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, private"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    }
+  ]
+}

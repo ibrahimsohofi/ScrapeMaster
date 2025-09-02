@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  datavault-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: datavault-dev
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: file:/app/data/dev.db
+      JWT_SECRET: development-jwt-secret-key
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      REDIS_URL: redis://redis-dev:6379
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - datavault_dev_data:/app/data
+    depends_on:
+      - redis-dev
+    restart: unless-stopped
+    networks:
+      - datavault-dev-network
+    command: bun run dev
+
+  redis-dev:
+    image: redis:7-alpine
+    container_name: datavault-redis-dev
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+    networks:
+      - datavault-dev-network
+    command: redis-server --appendonly yes
+
+networks:
+  datavault-dev-network:
+    driver: bridge
+
+volumes:
+  datavault_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
